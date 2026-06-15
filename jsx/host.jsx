@@ -558,6 +558,68 @@
     return applied;
   }
 
+  function collectAllOfficialSourceTextParams(clip) {
+    var params = [];
+    var seen = {};
+    var component = null;
+    try {
+      component = getMgtComponent(clip);
+    } catch (err) {
+      return params;
+    }
+    if (!component || !component.properties) {
+      return params;
+    }
+    for (var i = 0; i < collectionCount(component.properties); i++) {
+      var param = component.properties[i];
+      if (param && looksLikeTextParam(param)) {
+        var key = String(param.displayName || param.name || i);
+        if (!seen[key]) {
+          seen[key] = true;
+          params.push(param);
+        }
+      }
+    }
+    return params;
+  }
+
+  function getCurrentSourceText(param) {
+    try {
+      var candidates = getSourceTextValueCandidates(param, null);
+      for (var i = 0; i < candidates.length; i++) {
+        var raw = String(candidates[i].value);
+        var jsonStart = raw.indexOf("{");
+        if (jsonStart < 0) {
+          continue;
+        }
+        var parsed = JSON.parse(raw.substring(jsonStart));
+        if (parsed.mTextParam && parsed.mTextParam.mStyleSheet && typeof parsed.mTextParam.mStyleSheet.mText !== "undefined") {
+          return String(parsed.mTextParam.mStyleSheet.mText);
+        }
+        if (typeof parsed.text !== "undefined") {
+          return String(parsed.text);
+        }
+      }
+      return String(param.getValue());
+    } catch (err) {
+      return "";
+    }
+  }
+
+  function applyFontOverrideToAllSourceTexts(clip, styleOverride, updateUI, warnings, captionNumber) {
+    if (!styleOverride || !styleOverride.fontFamily) {
+      return;
+    }
+    var params = collectAllOfficialSourceTextParams(clip);
+    for (var i = 0; i < params.length; i++) {
+      try {
+        setParamText(params[i], getCurrentSourceText(params[i]), updateUI && i === params.length - 1, clip, styleOverride);
+      } catch (err) {
+        warnings.push("Caption " + captionNumber + ": font apply failed for " + (params[i].displayName || "Source Text") + " - " + (err.message || err));
+      }
+    }
+  }
+
   function getClipAt(track, startTicks) {
     var clips = track.clips;
     var best = null;
@@ -990,12 +1052,17 @@
   }
 
   function addFontName(fonts, seen, name) {
-    var normalized = normalizeFontRegistryName(name);
-    if (!normalized || seen[normalized.toLowerCase()]) {
+    addFontRecord(fonts, seen, name, name);
+  }
+
+  function addFontRecord(fonts, seen, label, postScriptName) {
+    var normalized = normalizeFontRegistryName(label);
+    var postScript = String(postScriptName || normalized);
+    if (!normalized || seen[(normalized + "|" + postScript).toLowerCase()]) {
       return;
     }
-    seen[normalized.toLowerCase()] = true;
-    fonts.push(normalized);
+    seen[(normalized + "|" + postScript).toLowerCase()] = true;
+    fonts.push({ label: normalized, postScript: postScript });
   }
 
   function parseRegFontOutput(output, fonts, seen) {
@@ -1016,9 +1083,118 @@
   function fontsJson(fonts) {
     var out = [];
     for (var i = 0; i < fonts.length; i++) {
-      out.push(jsonString(fonts[i]));
+      if (typeof fonts[i] === "string") {
+        out.push('{"label":' + jsonString(fonts[i]) + ',"postScript":' + jsonString(fonts[i]) + "}");
+      } else {
+        out.push('{"label":' + jsonString(fonts[i].label) + ',"postScript":' + jsonString(fonts[i].postScript) + "}");
+      }
     }
     return "[" + out.join(",") + "]";
+  }
+
+  function readUInt16BE(data, offset) {
+    return data.charCodeAt(offset) * 256 + data.charCodeAt(offset + 1);
+  }
+
+  function readUInt32BE(data, offset) {
+    return ((data.charCodeAt(offset) * 16777216) +
+      (data.charCodeAt(offset + 1) * 65536) +
+      (data.charCodeAt(offset + 2) * 256) +
+      data.charCodeAt(offset + 3));
+  }
+
+  function decodeUtf16BE(data, offset, length) {
+    var result = "";
+    for (var i = 0; i + 1 < length; i += 2) {
+      var code = readUInt16BE(data, offset + i);
+      if (code) {
+        result += String.fromCharCode(code);
+      }
+    }
+    return result;
+  }
+
+  function decodeMacRomanOrAscii(data, offset, length) {
+    var result = "";
+    for (var i = 0; i < length; i++) {
+      var code = data.charCodeAt(offset + i);
+      if (code) {
+        result += String.fromCharCode(code);
+      }
+    }
+    return result;
+  }
+
+  function readFontNameRecords(file) {
+    var records = {};
+    try {
+      file.encoding = "BINARY";
+      if (!file.open("r")) {
+        return records;
+      }
+      var data = file.read();
+      file.close();
+
+      var fontOffset = 0;
+      if (data.substring(0, 4) === "ttcf") {
+        fontOffset = readUInt32BE(data, 12);
+      }
+
+      var numTables = readUInt16BE(data, fontOffset + 4);
+      var nameOffset = -1;
+      for (var t = 0; t < numTables; t++) {
+        var rec = fontOffset + 12 + t * 16;
+        if (data.substring(rec, rec + 4) === "name") {
+          nameOffset = readUInt32BE(data, rec + 8);
+          break;
+        }
+      }
+      if (nameOffset < 0) {
+        return records;
+      }
+
+      var count = readUInt16BE(data, nameOffset + 2);
+      var storageOffset = nameOffset + readUInt16BE(data, nameOffset + 4);
+      for (var n = 0; n < count; n++) {
+        var nr = nameOffset + 6 + n * 12;
+        var platformId = readUInt16BE(data, nr);
+        var nameId = readUInt16BE(data, nr + 6);
+        var length = readUInt16BE(data, nr + 8);
+        var stringOffset = readUInt16BE(data, nr + 10);
+        if (nameId !== 1 && nameId !== 4 && nameId !== 6) {
+          continue;
+        }
+
+        var abs = storageOffset + stringOffset;
+        var value = platformId === 0 || platformId === 3 ?
+          decodeUtf16BE(data, abs, length) :
+          decodeMacRomanOrAscii(data, abs, length);
+        if (value && !records[nameId]) {
+          records[nameId] = value;
+        }
+      }
+    } catch (err) {
+      try {
+        file.close();
+      } catch (closeErr) {}
+    }
+    return records;
+  }
+
+  function scanFontFolder(folderPath, fonts, seen) {
+    var folder = new Folder(folderPath);
+    if (!folder.exists) {
+      return;
+    }
+    var files = folder.getFiles(function (entry) {
+      return entry instanceof File && /\.(otf|ttf|ttc)$/i.test(entry.name);
+    });
+    for (var i = 0; i < files.length; i++) {
+      var records = readFontNameRecords(files[i]);
+      var label = records[4] || records[1] || files[i].displayName || files[i].name;
+      var postScript = records[6] || label;
+      addFontRecord(fonts, seen, label, postScript);
+    }
   }
 
   $.srtMogrt = {
@@ -1061,10 +1237,18 @@
           parseRegFontOutput(system.callSystem('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"'), fonts, seen);
           parseRegFontOutput(system.callSystem('reg query "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"'), fonts, seen);
         }
+        if (Folder.fs === "Windows") {
+          scanFontFolder("C:/Windows/Fonts", fonts, seen);
+          var localAppData = (typeof $ !== "undefined" && $.getenv) ? $.getenv("LOCALAPPDATA") : "";
+          if (localAppData) {
+            scanFontFolder(localAppData + "/Microsoft/Windows/Fonts", fonts, seen);
+          }
+          scanFontFolder(Folder.userData.fsName + "/Microsoft/Windows/Fonts", fonts, seen);
+        }
 
         fonts.sort(function (a, b) {
-          var aa = a.toLowerCase();
-          var bb = b.toLowerCase();
+          var aa = String(a.label || a).toLowerCase();
+          var bb = String(b.label || b).toLowerCase();
           if (aa < bb) {
             return -1;
           }
@@ -1212,6 +1396,7 @@
               }
               setParamText(fixedParam, payload.fixedText, i === payload.items.length - 1, clip, payload.textStyleOverride);
             }
+            applyFontOverrideToAllSourceTexts(clip, payload.textStyleOverride, i === payload.items.length - 1, warnings, startIndex + i + 1);
             applyControlOverrides(clip, payload.controlOverrides, i === payload.items.length - 1, warnings, startIndex + i + 1);
             applied++;
           } catch (textErr) {

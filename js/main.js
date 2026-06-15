@@ -307,10 +307,12 @@
     empty.textContent = "Choose a font";
     els.fontFamilySelect.appendChild(empty);
 
-    fonts.forEach(function (fontName) {
+    fonts.forEach(function (font) {
+      var label = typeof font === "string" ? font : font.label;
+      var postScript = typeof font === "string" ? font : font.postScript;
       var option = document.createElement("option");
-      option.value = fontName;
-      option.textContent = fontName;
+      option.value = postScript || label;
+      option.textContent = label === postScript ? label : label + " (" + postScript + ")";
       els.fontFamilySelect.appendChild(option);
     });
   }
