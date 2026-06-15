@@ -10,6 +10,8 @@
     controlParams: [],
     sampleNodeId: ""
   };
+  var settingsKey = "captionToMogrt.settings.v1";
+  var savedSettings = {};
 
   var els = {
     hostStatus: document.getElementById("hostStatus"),
@@ -70,6 +72,33 @@
 
   function toHostEncodedJson(value) {
     return toHostString(encodeURIComponent(JSON.stringify(value)));
+  }
+
+  function loadSettings() {
+    try {
+      savedSettings = JSON.parse(window.localStorage.getItem(settingsKey) || "{}");
+    } catch (err) {
+      savedSettings = {};
+    }
+
+    els.fontOverrideCheckbox.checked = !!savedSettings.fontOverride;
+    if (savedSettings.fontFamily) {
+      els.fontFamilyInput.value = savedSettings.fontFamily;
+    }
+    if (typeof savedSettings.fixedText === "string") {
+      els.fixedTextInput.value = savedSettings.fixedText;
+    }
+  }
+
+  function saveSettings() {
+    savedSettings = {
+      fontOverride: els.fontOverrideCheckbox.checked,
+      fontFamily: els.fontFamilyInput.value,
+      fixedText: els.fixedTextInput.value
+    };
+    try {
+      window.localStorage.setItem(settingsKey, JSON.stringify(savedSettings));
+    } catch (err) {}
   }
 
   function processCaptionBatch(basePayload, startIndex, batchSize) {
@@ -315,6 +344,10 @@
       option.textContent = label === postScript ? label : label + " (" + postScript + ")";
       els.fontFamilySelect.appendChild(option);
     });
+
+    if (els.fontFamilyInput.value) {
+      els.fontFamilySelect.value = els.fontFamilyInput.value;
+    }
   }
 
   function updateReadyState() {
@@ -428,8 +461,13 @@
     if (els.fontFamilySelect.value) {
       els.fontFamilyInput.value = els.fontFamilySelect.value;
       els.fontOverrideCheckbox.checked = true;
+      saveSettings();
     }
   });
+
+  els.fontOverrideCheckbox.addEventListener("change", saveSettings);
+  els.fontFamilyInput.addEventListener("input", saveSettings);
+  els.fixedTextInput.addEventListener("input", saveSettings);
 
   els.applyButton.addEventListener("click", function () {
     if (!state.captions.length) {
@@ -482,5 +520,6 @@
   });
 
   els.hostStatus.textContent = window.__adobe_cep__ ? "Premiere connected" : "Preview outside CEP";
+  loadSettings();
   updateReadyState();
 })();
