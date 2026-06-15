@@ -88,17 +88,50 @@
     if (typeof savedSettings.fixedText === "string") {
       els.fixedTextInput.value = savedSettings.fixedText;
     }
+    if (!savedSettings.controlColors) {
+      savedSettings.controlColors = {};
+    }
   }
 
   function saveSettings() {
     savedSettings = {
       fontOverride: els.fontOverrideCheckbox.checked,
       fontFamily: els.fontFamilyInput.value,
-      fixedText: els.fixedTextInput.value
+      fixedText: els.fixedTextInput.value,
+      controlColors: savedSettings.controlColors || {}
     };
     try {
       window.localStorage.setItem(settingsKey, JSON.stringify(savedSettings));
     } catch (err) {}
+  }
+
+  function getControlStorageKey(param) {
+    return [
+      String(param.id || ""),
+      String(param.rawName || ""),
+      String(param.displayName || "")
+    ].join("|");
+  }
+
+  function saveControlColorSettings() {
+    var colors = {};
+    var rows = els.controlsList.querySelectorAll(".control-row");
+    Array.prototype.forEach.call(rows, function (row) {
+      if (row.dataset.controlKind !== "color") {
+        return;
+      }
+      var enabled = row.querySelector(".control-enabled");
+      var input = row.querySelector(".control-input");
+      if (!input) {
+        return;
+      }
+      colors[row.dataset.storageKey] = {
+        enabled: !!(enabled && enabled.checked),
+        value: input.value
+      };
+    });
+    savedSettings.controlColors = colors;
+    saveSettings();
   }
 
   function processCaptionBatch(basePayload, startIndex, batchSize) {
@@ -259,6 +292,7 @@
       row.dataset.rawName = String(param.rawName || "");
       row.dataset.valueType = String(param.valueType || "string");
       row.dataset.controlKind = String(param.controlKind || "");
+      row.dataset.storageKey = getControlStorageKey(param);
 
       var enabled = document.createElement("input");
       enabled.type = "checkbox";
@@ -275,6 +309,13 @@
       if (param.controlKind === "color") {
         input.type = "color";
         input.value = packedColorToHex(param.valueText) || "#ffffff";
+        var savedColor = savedSettings.controlColors && savedSettings.controlColors[row.dataset.storageKey];
+        if (savedColor) {
+          enabled.checked = !!savedColor.enabled;
+          if (savedColor.value) {
+            input.value = savedColor.value;
+          }
+        }
       } else if (param.valueType === "boolean") {
         input.type = "checkbox";
         input.checked = param.valueText === "true";
@@ -468,6 +509,8 @@
   els.fontOverrideCheckbox.addEventListener("change", saveSettings);
   els.fontFamilyInput.addEventListener("input", saveSettings);
   els.fixedTextInput.addEventListener("input", saveSettings);
+  els.controlsList.addEventListener("input", saveControlColorSettings);
+  els.controlsList.addEventListener("change", saveControlColorSettings);
 
   els.applyButton.addEventListener("click", function () {
     if (!state.captions.length) {
