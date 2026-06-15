@@ -716,7 +716,16 @@
       if (!node.hasOwnProperty(key)) {
         continue;
       }
-      if (typeof node[key] === "string" && isFontLikeKey(key)) {
+      if (isFontLikeKey(key) && node[key] instanceof Array) {
+        for (var j = 0; j < node[key].length; j++) {
+          if (typeof node[key][j] === "string") {
+            node[key][j] = fontFamily;
+          }
+        }
+        if (!node[key].length) {
+          node[key].push(fontFamily);
+        }
+      } else if (typeof node[key] === "string" && isFontLikeKey(key)) {
         node[key] = fontFamily;
       } else if (node[key] && typeof node[key] === "object") {
         touchFontKeysDeep(node[key], fontFamily);
@@ -764,6 +773,7 @@
         if (parsed.mTextParam && parsed.mTextParam.mStyleSheet) {
           collectFontKeysFromNode(parsed.mTextParam.mStyleSheet, "mStyleSheet", lines);
         }
+        collectFontKeysFromNode(parsed, "sourceTextJson", lines);
       } catch (err) {}
     }
     return lines;
@@ -780,6 +790,11 @@
           linkParsed.mTextParam.mStyleSheet.mText = text;
           applyTextStyleOverrides(linkParsed.mTextParam.mStyleSheet, styleOverride);
           return linkPrefix + JSON.stringify(linkParsed);
+        }
+        var linkReplaced = replaceTextFields(linkParsed, text);
+        if (linkReplaced.changed) {
+          applyTextStyleOverrides(linkReplaced.value, styleOverride);
+          return linkPrefix + JSON.stringify(linkReplaced.value);
         }
       } catch (linkErr) {}
     }
@@ -799,6 +814,7 @@
 
     var replaced = replaceTextFields(parsed, text);
     if (replaced.changed) {
+      applyTextStyleOverrides(replaced.value, styleOverride);
       return prefix + JSON.stringify(replaced.value);
     }
 
