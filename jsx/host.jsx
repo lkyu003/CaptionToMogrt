@@ -596,6 +596,12 @@
         if (parsed.mTextParam && parsed.mTextParam.mStyleSheet && typeof parsed.mTextParam.mStyleSheet.mText !== "undefined") {
           return String(parsed.mTextParam.mStyleSheet.mText);
         }
+        if (typeof parsed.textEditValue !== "undefined") {
+          return String(parsed.textEditValue);
+        }
+        if (parsed.mStyleSheet && typeof parsed.mStyleSheet.mText !== "undefined") {
+          return String(parsed.mStyleSheet.mText);
+        }
         if (typeof parsed.text !== "undefined") {
           return String(parsed.text);
         }
@@ -675,8 +681,7 @@
 
     function isTextBodyKey(keyName) {
       var key = String(keyName || "").toLowerCase();
-      return key === "mtextparam" ||
-        key === "text" ||
+      return key === "text" ||
         key === "texteditvalue" ||
         key === "sourcetext";
     }
