@@ -157,7 +157,7 @@
 
   function looksLikeTextParam(param) {
     var name = String(param.displayName || "").toLowerCase();
-    return isSourceTextName(name);
+    return isSourceTextName(name) || hasEditableTextJson(param);
   }
 
   function isSourceTextName(name) {
@@ -170,11 +170,26 @@
       value.indexOf("\uc18c\uc2a4\ud14d\uc2a4\ud2b8") >= 0;
   }
 
+  function hasEditableTextJson(param) {
+    try {
+      var value = String(param.getValue());
+      if (value.indexOf("{") < 0) {
+        return false;
+      }
+      return value.indexOf('"textEditValue"') >= 0 ||
+        value.indexOf('"mTextParam"') >= 0 ||
+        value.indexOf('"fontEditValue"') >= 0 ||
+        value.indexOf('"capPropTextRunCount"') >= 0;
+    } catch (err) {
+      return false;
+    }
+  }
+
   function getValueType(param) {
     try {
       var value = param.getValue();
       if (typeof value === "string") {
-        if (value.charAt(0) === "{" && value.indexOf('"text"') >= 0) {
+        if (value.indexOf("{") >= 0 && hasEditableTextJson(param)) {
           return "text document json";
         }
         return "string";
