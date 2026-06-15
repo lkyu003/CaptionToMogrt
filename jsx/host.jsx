@@ -297,6 +297,25 @@
       value.indexOf("\uceec\ub7ec") >= 0;
   }
 
+  function isPackedColorValue(value) {
+    if (typeof value !== "number") {
+      return false;
+    }
+    return value >= Math.pow(2, 56) && value <= Math.pow(2, 56) + (255 * Math.pow(2, 40)) + (255 * Math.pow(2, 24)) + (255 * Math.pow(2, 8));
+  }
+
+  function getControlKind(param, displayName) {
+    if (isColorControlName(displayName)) {
+      return "color";
+    }
+    try {
+      if (isPackedColorValue(param.getValue())) {
+        return "color";
+      }
+    } catch (err) {}
+    return "";
+  }
+
   function pushControlParamsFromMgt(controls, properties, diagnostics) {
     var count = collectionCount(properties);
     for (var i = 0; i < count; i++) {
@@ -307,7 +326,7 @@
       }
 
       var valueType = getValueType(param);
-      var controlKind = isColorControlName(displayName) ? "color" : "";
+      var controlKind = getControlKind(param, displayName);
       controls.push(
         '{"id":' + jsonString("mgt:" + i) +
         ',"index":' + i +
