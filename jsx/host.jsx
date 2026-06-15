@@ -651,7 +651,38 @@
     return { value: result, changed: changed };
   }
 
-  function replacePremiereSourceTextJson(rawValue, text) {
+  function applyTextStyleOverrides(styleSheet, styleOverride) {
+    if (!styleSheet || !styleOverride) {
+      return;
+    }
+
+    var fontFamily = String(styleOverride.fontFamily || "");
+    if (fontFamily) {
+      var touched = false;
+      var fontKeys = [
+        "mFontName",
+        "mFontFamily",
+        "mPostScriptName",
+        "fontName",
+        "fontFamily",
+        "postScriptName"
+      ];
+      for (var i = 0; i < fontKeys.length; i++) {
+        if (typeof styleSheet[fontKeys[i]] !== "undefined") {
+          styleSheet[fontKeys[i]] = fontFamily;
+          touched = true;
+        }
+      }
+
+      if (!touched) {
+        styleSheet.mFontName = fontFamily;
+        styleSheet.mFontFamily = fontFamily;
+        styleSheet.mPostScriptName = fontFamily;
+      }
+    }
+  }
+
+  function replacePremiereSourceTextJson(rawValue, text, styleOverride) {
     var raw = String(rawValue);
 
     if (raw.length > 4) {
@@ -660,6 +691,7 @@
         var linkParsed = JSON.parse(raw.substring(4));
         if (linkParsed.mTextParam && linkParsed.mTextParam.mStyleSheet) {
           linkParsed.mTextParam.mStyleSheet.mText = text;
+          applyTextStyleOverrides(linkParsed.mTextParam.mStyleSheet, styleOverride);
           return linkPrefix + JSON.stringify(linkParsed);
         }
       } catch (linkErr) {}
@@ -674,6 +706,7 @@
 
     if (parsed.mTextParam && parsed.mTextParam.mStyleSheet) {
       parsed.mTextParam.mStyleSheet.mText = text;
+      applyTextStyleOverrides(parsed.mTextParam.mStyleSheet, styleOverride);
       return prefix + JSON.stringify(parsed);
     }
 
@@ -712,7 +745,7 @@
     return candidates;
   }
 
-  function setParamText(param, text, updateUI, clip) {
+  function setParamText(param, text, updateUI, clip, styleOverride) {
     var currentValue = null;
     try {
       currentValue = param.getValue();
@@ -724,7 +757,7 @@
       var candidates = getSourceTextValueCandidates(param, clip);
       for (var c = 0; c < candidates.length; c++) {
         try {
-          var candidateOut = replacePremiereSourceTextJson(candidates[c].value, text);
+          var candidateOut = replacePremiereSourceTextJson(candidates[c].value, text, styleOverride);
           if (candidateOut !== null) {
             return param.setValue(candidateOut, updateUI ? 1 : 0);
           }
@@ -734,7 +767,7 @@
 
     if (typeof currentValue === "string") {
       try {
-        var sourceTextJson = replacePremiereSourceTextJson(currentValue, text);
+        var sourceTextJson = replacePremiereSourceTextJson(currentValue, text, styleOverride);
         if (sourceTextJson !== null) {
           return param.setValue(sourceTextJson, updateUI ? 1 : 0);
         }
@@ -979,7 +1012,7 @@
             if (!param) {
               throw new Error("Selected text parameter was not found.");
             }
-            var setResult = setParamText(param, item.text, i === payload.items.length - 1, clip);
+            var setResult = setParamText(param, item.text, i === payload.items.length - 1, clip, payload.textStyleOverride);
             if (setResult === false) {
               warnings.push("Caption " + (startIndex + i + 1) + ": setValue returned " + setResult);
             }
@@ -988,7 +1021,7 @@
               if (!fixedParam) {
                 throw new Error("Selected fixed text parameter was not found.");
               }
-              setParamText(fixedParam, payload.fixedText, i === payload.items.length - 1, clip);
+              setParamText(fixedParam, payload.fixedText, i === payload.items.length - 1, clip, payload.textStyleOverride);
             }
             applyControlOverrides(clip, payload.controlOverrides, i === payload.items.length - 1, warnings, startIndex + i + 1);
             applied++;

@@ -22,6 +22,8 @@
     textParamSelect: document.getElementById("textParamSelect"),
     fixedTextParamSelect: document.getElementById("fixedTextParamSelect"),
     fixedTextInput: document.getElementById("fixedTextInput"),
+    fontOverrideCheckbox: document.getElementById("fontOverrideCheckbox"),
+    fontFamilyInput: document.getElementById("fontFamilyInput"),
     controlsList: document.getElementById("controlsList"),
     targetTrackInput: document.getElementById("targetTrackInput"),
     audioTrackInput: document.getElementById("audioTrackInput"),
@@ -416,6 +418,9 @@
       fixedTextParamName: fixedParam ? (fixedParam.rawName || fixedParam.displayName) : "",
       fixedTextParamIndex: Number(els.fixedTextParamSelect.value),
       fixedText: els.fixedTextInput.value,
+      textStyleOverride: {
+        fontFamily: els.fontOverrideCheckbox.checked ? els.fontFamilyInput.value : ""
+      },
       targetVideoTrack: Math.max(0, Number(els.targetTrackInput.value) - 1),
       targetAudioTrack: Number(els.audioTrackInput.value),
       overwrite: els.overwriteCheckbox.checked,
