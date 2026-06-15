@@ -660,11 +660,20 @@
     if (fontFamily) {
       var touched = false;
       var fontKeys = [
+        "mFont",
         "mFontName",
         "mFontFamily",
+        "mFontFamilyName",
+        "mFontFullName",
         "mPostScriptName",
+        "mPostScriptFontName",
+        "mFontPostScriptName",
+        "mFontPSName",
+        "mTypeface",
         "fontName",
         "fontFamily",
+        "fontFamilyName",
+        "fontFullName",
         "postScriptName"
       ];
       for (var i = 0; i < fontKeys.length; i++) {
@@ -679,7 +688,85 @@
         styleSheet.mFontFamily = fontFamily;
         styleSheet.mPostScriptName = fontFamily;
       }
+
+      touchFontKeysDeep(styleSheet, fontFamily);
     }
+  }
+
+  function isFontLikeKey(keyName) {
+    var key = String(keyName || "").toLowerCase();
+    return key.indexOf("font") >= 0 ||
+      key.indexOf("typeface") >= 0 ||
+      key.indexOf("postscript") >= 0;
+  }
+
+  function touchFontKeysDeep(node, fontFamily) {
+    if (!node || typeof node !== "object") {
+      return;
+    }
+
+    if (node instanceof Array) {
+      for (var i = 0; i < node.length; i++) {
+        touchFontKeysDeep(node[i], fontFamily);
+      }
+      return;
+    }
+
+    for (var key in node) {
+      if (!node.hasOwnProperty(key)) {
+        continue;
+      }
+      if (typeof node[key] === "string" && isFontLikeKey(key)) {
+        node[key] = fontFamily;
+      } else if (node[key] && typeof node[key] === "object") {
+        touchFontKeysDeep(node[key], fontFamily);
+      }
+    }
+  }
+
+  function collectFontKeysFromNode(node, path, lines) {
+    if (!node || typeof node !== "object" || lines.length >= 20) {
+      return;
+    }
+
+    if (node instanceof Array) {
+      for (var i = 0; i < node.length; i++) {
+        collectFontKeysFromNode(node[i], path + "[" + i + "]", lines);
+      }
+      return;
+    }
+
+    for (var key in node) {
+      if (!node.hasOwnProperty(key) || lines.length >= 20) {
+        continue;
+      }
+      var nextPath = path ? path + "." + key : key;
+      if (isFontLikeKey(key)) {
+        lines.push(nextPath + "=" + String(node[key]));
+      }
+      if (node[key] && typeof node[key] === "object") {
+        collectFontKeysFromNode(node[key], nextPath, lines);
+      }
+    }
+  }
+
+  function collectSourceTextFontDiagnostics(param, clip) {
+    var lines = [];
+    var candidates = getSourceTextValueCandidates(param, clip);
+    for (var i = 0; i < candidates.length; i++) {
+      try {
+        var raw = String(candidates[i].value);
+        var jsonStart = raw.indexOf("{");
+        if (jsonStart < 0) {
+          continue;
+        }
+        var parsed = JSON.parse(raw.substring(jsonStart));
+        if (parsed.mTextParam && parsed.mTextParam.mStyleSheet) {
+          collectFontKeysFromNode(parsed.mTextParam.mStyleSheet, "mStyleSheet", lines);
+        }
+      } catch (err) {}
+    }
+    return lines;
   }
 
   function replacePremiereSourceTextJson(rawValue, text, styleOverride) {
@@ -993,7 +1080,26 @@
           return errorJsonWithDiagnostics("No editable text parameter was found on the selected clip.", diagnostics);
         }
 
-        return okJson('"sampleNodeId":' + jsonString(clip.nodeId || "") + ',"params":[' + params.join(",") + '],"controls":[' + controls.join(",") + "]");
+        var officialParam = getOfficialMgtSourceTextParam(clip, params.length ? params[0].rawName : "");
+        if (officialParam) {
+          var fontLines = collectSourceTextFontDiagnostics(officialParam, clip);
+          if (fontLines.length) {
+            diagnostics.push("Source Text font keys:");
+            for (var f = 0; f < fontLines.length; f++) {
+              diagnostics.push("  " + fontLines[f]);
+            }
+          } else {
+            diagnostics.push("No font-like keys found in Source Text style JSON.");
+          }
+        }
+
+        var diagnosticJson = [];
+        var diagnosticCount = Math.min(diagnostics.length, 60);
+        for (var d = 0; d < diagnosticCount; d++) {
+          diagnosticJson.push(jsonString(diagnostics[d]));
+        }
+
+        return okJson('"sampleNodeId":' + jsonString(clip.nodeId || "") + ',"params":[' + params.join(",") + '],"controls":[' + controls.join(",") + '],"diagnostics":[' + diagnosticJson.join(",") + "]");
       } catch (err) {
         return errorJson(err.message || err);
       }
