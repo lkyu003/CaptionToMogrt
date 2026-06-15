@@ -161,6 +161,13 @@ select {
   gap: 8px;
 }
 
+.font-picker {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
 .controls-list {
   display: flex;
   flex-direction: column;

@@ -879,6 +879,45 @@
     return "[" + out.join(",") + "]";
   }
 
+  function normalizeFontRegistryName(name) {
+    return String(name || "")
+      .replace(/\s*\((TrueType|OpenType|Type 1|All res)\)\s*$/i, "")
+      .replace(/\s*&\s*/g, " / ")
+      .replace(/^\s+|\s+$/g, "");
+  }
+
+  function addFontName(fonts, seen, name) {
+    var normalized = normalizeFontRegistryName(name);
+    if (!normalized || seen[normalized.toLowerCase()]) {
+      return;
+    }
+    seen[normalized.toLowerCase()] = true;
+    fonts.push(normalized);
+  }
+
+  function parseRegFontOutput(output, fonts, seen) {
+    var lines = String(output || "").split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].replace(/^\s+|\s+$/g, "");
+      if (!line || line.indexOf("REG_") < 0) {
+        continue;
+      }
+
+      var match = line.match(/^(.*?)\s+REG_\w+\s+(.+)$/);
+      if (match && match[1]) {
+        addFontName(fonts, seen, match[1]);
+      }
+    }
+  }
+
+  function fontsJson(fonts) {
+    var out = [];
+    for (var i = 0; i < fonts.length; i++) {
+      out.push(jsonString(fonts[i]));
+    }
+    return "[" + out.join(",") + "]";
+  }
+
   $.srtMogrt = {
     chooseSrtFile: function () {
       try {
@@ -905,6 +944,34 @@
           return errorJson("MOGRT file selection was cancelled.");
         }
         return okJson('"path":' + jsonString(file.fsName));
+      } catch (err) {
+        return errorJson(err.message || err);
+      }
+    },
+
+    listInstalledFonts: function () {
+      try {
+        var fonts = [];
+        var seen = {};
+
+        if (typeof system !== "undefined" && system.callSystem && Folder.fs === "Windows") {
+          parseRegFontOutput(system.callSystem('reg query "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"'), fonts, seen);
+          parseRegFontOutput(system.callSystem('reg query "HKCU\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts"'), fonts, seen);
+        }
+
+        fonts.sort(function (a, b) {
+          var aa = a.toLowerCase();
+          var bb = b.toLowerCase();
+          if (aa < bb) {
+            return -1;
+          }
+          if (aa > bb) {
+            return 1;
+          }
+          return 0;
+        });
+
+        return okJson('"fonts":' + fontsJson(fonts));
       } catch (err) {
         return errorJson(err.message || err);
       }

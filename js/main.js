@@ -24,6 +24,8 @@
     fixedTextInput: document.getElementById("fixedTextInput"),
     fontOverrideCheckbox: document.getElementById("fontOverrideCheckbox"),
     fontFamilyInput: document.getElementById("fontFamilyInput"),
+    loadFontsButton: document.getElementById("loadFontsButton"),
+    fontFamilySelect: document.getElementById("fontFamilySelect"),
     controlsList: document.getElementById("controlsList"),
     targetTrackInput: document.getElementById("targetTrackInput"),
     audioTrackInput: document.getElementById("audioTrackInput"),
@@ -43,6 +45,7 @@
     els.chooseSrtButton.disabled = isBusy;
     els.chooseMogrtButton.disabled = isBusy;
     els.scanMogrtButton.disabled = isBusy;
+    els.loadFontsButton.disabled = isBusy;
     els.applyButton.disabled = isBusy;
   }
 
@@ -297,6 +300,21 @@
     }
   }
 
+  function renderFonts(fonts) {
+    els.fontFamilySelect.innerHTML = "";
+    var empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = "Choose a font";
+    els.fontFamilySelect.appendChild(empty);
+
+    fonts.forEach(function (fontName) {
+      var option = document.createElement("option");
+      option.value = fontName;
+      option.textContent = fontName;
+      els.fontFamilySelect.appendChild(option);
+    });
+  }
+
   function updateReadyState() {
     els.applyButton.disabled = !state.captions.length || !state.textParams.length || !state.mogrtPath;
   }
@@ -386,6 +404,29 @@
       log("Selected MOGRT: " + result.path);
       updateReadyState();
     });
+  });
+
+  els.loadFontsButton.addEventListener("click", function () {
+    setBusy(true);
+    log("Loading installed fonts...");
+    evalHost("$.srtMogrt.listInstalledFonts()", function (result) {
+      setBusy(false);
+      if (!result.ok) {
+        log("Error: " + result.error);
+        updateReadyState();
+        return;
+      }
+      renderFonts(result.fonts || []);
+      log("Loaded " + (result.fonts || []).length + " fonts");
+      updateReadyState();
+    });
+  });
+
+  els.fontFamilySelect.addEventListener("change", function () {
+    if (els.fontFamilySelect.value) {
+      els.fontFamilyInput.value = els.fontFamilySelect.value;
+      els.fontOverrideCheckbox.checked = true;
+    }
   });
 
   els.applyButton.addEventListener("click", function () {
