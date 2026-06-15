@@ -1,0 +1,89 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>SRT to MOGRT</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+    <script src="./lib/CSInterface.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <header class="header">
+        <h1>SRT to MOGRT</h1>
+        <div id="hostStatus" class="status">Waiting for Premiere</div>
+      </header>
+
+      <div class="content-scroll">
+        <section class="section">
+          <div class="section-title">1. SRT file</div>
+          <button id="chooseSrtButton" class="primary">Choose SRT</button>
+          <div id="srtSummary" class="summary">No file selected</div>
+        </section>
+
+        <section class="section">
+          <div class="section-title">2. Sample MOGRT clip</div>
+          <button id="scanMogrtButton">Inspect Selected Clip</button>
+          <div class="hint">Select one sample motion graphics clip in the timeline first.</div>
+          <label class="field">
+            <span>SRT text parameter</span>
+            <select id="textParamSelect"></select>
+          </label>
+          <label class="field">
+            <span>Fixed text parameter</span>
+            <select id="fixedTextParamSelect"></select>
+          </label>
+          <label class="field">
+            <span>Fixed text value</span>
+            <input id="fixedTextInput" type="text" placeholder="Optional text applied to every clip" />
+          </label>
+          <div class="control-group">
+            <div class="sub-title">Exposed controls to override</div>
+            <div id="controlsList" class="controls-list">
+              <div class="summary">Inspect a clip to load controls</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-title">3. Source MOGRT file</div>
+          <button id="chooseMogrtButton">Choose MOGRT</button>
+          <div id="mogrtSummary" class="summary">No file selected</div>
+        </section>
+
+        <section class="section">
+          <div class="section-title">4. Insert settings</div>
+          <label class="field compact">
+            <span>Target video track number</span>
+            <input id="targetTrackInput" type="number" min="1" step="1" value="2" />
+          </label>
+          <label class="field compact">
+            <span>Audio track offset</span>
+            <input id="audioTrackInput" type="number" min="0" step="1" value="0" />
+          </label>
+          <label class="field compact">
+            <span>Batch size</span>
+            <input id="batchSizeInput" type="number" min="1" max="100" step="1" value="15" />
+          </label>
+          <label class="checkbox">
+            <input id="overwriteCheckbox" type="checkbox" checked />
+            <span>Overwrite clips at the same position</span>
+          </label>
+        </section>
+
+        <section class="section actions">
+          <button id="applyButton" class="primary">Create MOGRT Clips</button>
+          <progress id="progress" max="100" value="0"></progress>
+        </section>
+      </div>
+
+      <section class="log-panel">
+        <div class="log-header">
+          <span>Log</span>
+          <button id="clearLogButton" class="small" type="button">Clear</button>
+        </div>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script src="./js/main.js"></script>
+  </body>
+</html>
